@@ -20,6 +20,7 @@ public:
   ~StateMachine();
 
   void goToState(State* state);
+  bool isCurrentState(State* state);
 
   void update();
 

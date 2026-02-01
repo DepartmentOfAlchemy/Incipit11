@@ -31,6 +31,15 @@ void StateMachine::goToState(State *state)
   }
 }
 
+bool StateMachine::isCurrentState(State *state)
+{
+  if (state == _state) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 void StateMachine::update()
 {
   if (_state != NULL) {

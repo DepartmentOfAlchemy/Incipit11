@@ -1,6 +1,9 @@
 #define DEBUG  // comment out to turn off debug serial output
 #include "DebugMacros.h"
 
+#define TEST_BUTTON   // use to test the button
+                      // else test the neopixel
+
 #include <tinyNeoPixel_Static.h>
 #include <OneButton.h>
 
@@ -84,6 +87,8 @@ void setup() {
   DPRINTLN("Transition to STATE_AMBIENT");
 }
 
+#ifdef TEST_BUTTON   // use to test the button
+
 void loop() {
   // put your main code here, to run repeatedly:
   unsigned long currentMillis = millis();
@@ -104,7 +109,7 @@ void loop() {
 
   switch (state) {
     case STATE_AMBIENT:
-      leds.setPixelColor(0, leds.Color(0, 128, 0)); // green
+      leds.setPixelColor(0, leds.Color(0, 2, 0)); // green
       leds.show();
 
       // state transition
@@ -158,8 +163,10 @@ void loop() {
   }
 }
 
-/*
-void loop_old() {
+#else
+
+// test the neopixel
+void loop() {
   // put your main code here, to run repeatedly:
   button.tick();
   digitalWrite(PWM_OUTPUT, HIGH);
@@ -183,4 +190,5 @@ void loop_old() {
   };
   delay(1000);
 }
-*/
+
+#endif

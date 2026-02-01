@@ -1,5 +1,5 @@
-#ifndef Effects_h
-#define Effects_h
+#ifndef Effect_h
+#define Effect_h
 
 #include "Arduino.h"
 
@@ -142,6 +142,162 @@ protected:
   unsigned long transitionPeriod;
   unsigned long lastTransitionTime;
   bool nextTransition;
+};
+
+class Sparkle : public Effect {
+public:
+  Sparkle(uint8_t pin) : Effect(pin) {
+    _brightness = 0;
+    _intensity = 0;
+    transitionPeriod = 0;
+    lastTransitionTime = 0;
+    sparkleOn = true;
+
+    // initialize to off
+    analogWrite(_pin, _brightness);
+    _lastBrightness = _brightness;
+  }
+
+  uint8_t getIntensity() {
+    return _intensity;
+  }
+
+  void setIntensity(uint8_t intensity) {
+    if (intensity > 5) {
+      intensity = 5;
+    }
+    _intensity = intensity;
+  }
+
+  void enter() override {
+    // set to turn on if strobing on next update()
+    lastTransitionTime = 0;
+    sparkleOn = true;
+
+    _lastBrightness = 0;
+    // edge condition
+    // in update, since _brightness == _lastBrightness it would never set the output off
+    if (_brightness == 0) {
+      analogWrite(_pin, _brightness);
+    }
+  }
+
+  void update(unsigned long now = 0) override {
+    uint16_t min;
+    uint16_t max;
+
+    if (_intensity == 0) {
+      // constrant
+      if (_lastBrightness != _brightness) {
+        analogWrite(_pin, gamma_lut[_brightness]);
+        _lastBrightness = _brightness;
+      }
+    } else {
+      // sparkling
+      if (now == 0) {
+        now = millis();
+      }
+
+      if (now >= (lastTransitionTime + transitionPeriod)) {
+        lastTransitionTime = now;
+        // transition between on/off
+        if (sparkleOn) {
+          analogWrite(_pin, gamma_lut[_brightness]);
+          _lastBrightness = _brightness;
+          if (_intensity == 1) {
+            min = 20; // 20ms
+            max = 75; // 75ms
+          } else if (_intensity == 2) {
+            min = 20;  // 20ms
+            max = 100; // 100ms
+          } else {
+            min = 30;  // 30ms
+            max = 200; // 200ms
+          }
+          transitionPeriod = random(min, max); // Random ON duration (30ms to 200ms)
+          sparkleOn = false; // turn off after transition period
+        } else {
+          analogWrite(_pin, 0);
+          _lastBrightness = 0;
+          if (_intensity == 1) {
+            min = 200; // 200ms
+            max = 1000; // 1000ms
+          } else if (_intensity == 2) {
+            min = 60;  // 60ms
+            max = 400; // 400ms
+          } else {
+            min = 50;  // 50ms
+            max = 300; // 300ms
+          }
+          transitionPeriod = random(min, max); // Random OFF duration (50ms to 300ms)
+          sparkleOn = true; // turn on after transition period
+        }
+      }
+    }
+  }
+
+  ~Sparkle() override {}
+
+protected:
+  uint8_t _lastBrightness;
+  uint8_t _intensity;
+  unsigned long transitionPeriod;
+  unsigned long lastTransitionTime;
+  bool sparkleOn;
+};
+
+class Flicker : public Effect {
+public:
+  Flicker(uint8_t pin) : Effect(pin) {
+    _brightness = 255;
+    transitionPeriod = 60;
+    lastTransitionTime = 0;
+
+    // initialize to off
+    analogWrite(_pin, _brightness);
+    _lastBrightness = _brightness;
+  }
+
+  uint8_t getPeriod() {
+    return transitionPeriod;
+  }
+
+  void setPeriod(uint8_t period) {
+    transitionPeriod = period;
+  }
+
+  void enter() override {
+    // set to turn on if strobing on next update()
+    lastTransitionTime = 0;
+
+    _lastBrightness = 0;
+    // edge condition
+    // in update, since _brightness == _lastBrightness it would never set the output off
+    if (_brightness == 0) {
+      analogWrite(_pin, _brightness);
+    }
+  }
+
+  void update(unsigned long now = 0) override {
+    uint8_t brightness;
+    uint8_t dim; // dimming value
+
+    if (now >= (lastTransitionTime + transitionPeriod)) {
+      lastTransitionTime = now;
+
+      dim = 255 - _brightness;
+      brightness = random(120) + 135 - dim;
+      analogWrite(_pin, gamma_lut[brightness]);
+      _lastBrightness = brightness;
+    }
+  }
+
+  ~Flicker() override {}
+
+protected:
+  uint8_t _lastBrightness;
+  unsigned long transitionPeriod;
+  unsigned long lastTransitionTime;
 };
 
 #endif
