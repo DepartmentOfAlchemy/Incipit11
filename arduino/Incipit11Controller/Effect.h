@@ -246,9 +246,9 @@ protected:
   bool sparkleOn;
 };
 
-class Flicker : public Effect {
+class FlickerOff : public Effect {
 public:
-  Flicker(uint8_t pin) : Effect(pin) {
+  FlickerOff(uint8_t pin) : Effect(pin) {
     _brightness = 255;
     transitionPeriod = 60;
     lastTransitionTime = 0;
@@ -286,13 +286,17 @@ public:
       lastTransitionTime = now;
 
       dim = 255 - _brightness;
+      if (dim > 135) {
+        // don't let brightness go below 0 because it is unsigned
+        dim = 135;
+      }
       brightness = random(120) + 135 - dim;
       analogWrite(_pin, gamma_lut[brightness]);
       _lastBrightness = brightness;
     }
   }
 
-  ~Flicker() override {}
+  ~FlickerOff() override {}
 
 protected:
   uint8_t _lastBrightness;
@@ -300,4 +304,101 @@ protected:
   unsigned long lastTransitionTime;
 };
 
+class FlickerOn : public Effect {
+public:
+  FlickerOn(uint8_t pin) : Effect(pin) {
+    _brightness = 255;
+    // i = 15, t = 10 looks good
+    _intensity = 45;
+    _threshold = 30;
+    _baseBrightness = 0;
+    transitionPeriod = 60;
+    lastTransitionTime = 0;
+
+    // initialize to off
+    analogWrite(_pin, _brightness);
+    _lastBrightness = _brightness;
+  }
+
+  uint8_t getPeriod() {
+    return transitionPeriod;
+  }
+
+  void setPeriod(uint8_t period) {
+    transitionPeriod = period;
+  }
+
+  uint8_t getIntensity() {
+    return _intensity;
+  }
+
+  void setIntensity(uint8_t intensity) {
+    _intensity = intensity;
+  }
+
+  uint8_t getThreshold() {
+    return _threshold;
+  }
+
+  void setThreshold(uint8_t threshold) {
+    _threshold = threshold;
+  }
+
+  uint8_t getBaseBrightness() {
+    return _baseBrightness;
+  }
+
+  void setBaseBrightness(uint8_t baseBrightness) {
+    _baseBrightness = baseBrightness;
+  }
+
+  void enter() override {
+    // set to turn on if strobing on next update()
+    lastTransitionTime = 0;
+
+    _lastBrightness = 0;
+    // edge condition
+    // in update, since _brightness == _lastBrightness it would never set the output off
+    if (_brightness == 0) {
+      analogWrite(_pin, _brightness);
+    }
+  }
+
+  void update(unsigned long now = 0) override {
+    uint8_t brightness;
+    uint8_t offset;
+    uint8_t baseBrightness;
+
+    if (now >= (lastTransitionTime + transitionPeriod)) {
+      lastTransitionTime = now;
+
+      baseBrightness = min(_baseBrightness, _brightness);
+      brightness = random(_intensity);
+
+      if (brightness < _threshold) {
+        brightness = baseBrightness;
+      } else {
+        if (_intensity < _brightness) {
+          offset = _brightness - _intensity;
+        } else {
+          offset = 0;
+        }
+        brightness = brightness + offset;
+      }
+
+      analogWrite(_pin, gamma_lut[brightness]);
+      _lastBrightness = brightness;
+    }
+  }
+
+  ~FlickerOn() override {}
+
+protected:
+  uint8_t _lastBrightness;
+  uint8_t _intensity;
+  uint8_t _threshold;
+  uint8_t _baseBrightness;
+  unsigned long transitionPeriod;
+  unsigned long lastTransitionTime;
+};
 #endif

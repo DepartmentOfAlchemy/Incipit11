@@ -50,7 +50,7 @@ const uint32_t COLOR_GREEN_75 = leds.Color(0, 64, 0);
 const uint32_t COLOR_YELLOW = leds.Color(231, 216, 77);
 const uint32_t COLOR_RED = leds.Color(128, 0, 0);
 const uint32_t COLOR_BLUE = leds.Color(0, 0, 128);
-const uint32_t COLOR_PURPLE = leds.Color(187, 118, 245);
+const uint32_t COLOR_PURPLE = leds.Color(82, 38, 128);
 
 OneButton button;
 OneButton trigger;
@@ -86,11 +86,6 @@ keyEventRaw triggerPressedEvent = { {SEESAW_KEYPAD_EDGE_RISING, KEY_NUM_TRIGGER}
 uint8_t outputStatus = LOW;
 unsigned long currentMillis = 0;
 unsigned long outputPreviousMillis = 0;
-//uint8_t buttonPressed = false;
-//uint8_t buttonClicked = false;
-//uint8_t buttonDoubleClicked = false;
-//uint8_t buttonLongPressStarted = false;
-//uint8_t triggerPressed = false;
 unsigned long previousMillis = 0;
 const long interval = 1000; // 1 second duration for testing
 const long stepInterval = 25;
@@ -101,47 +96,42 @@ const long recordingPrepOff = 1000 - recordingPrepOn; // milliseconds off
 uint8_t recordingPrepState = false; // on (true) or off (false)
 uint8_t recordingPrepCount = 0;
 
+// Wait for the effect change to "settle" before writing to EEPROM
+const uint32_t ambientEffectSettleTime = 15000; // milliseconds; 15 seconds
+
+bool ambientEffectSaved = true; // start with the effect saved to EEPROM
+
 void fClicked() {
   DPRINTLN("Click.");
-//  buttonClicked = true;
   BUTTON_FLAG_SET(FLAG_BUTTON_CLICKED);
   enqueueKeyEvent(buttonClickedEvent);
 }
 
 void fPressed() {
   DPRINTLN("Pressed.");
-//  buttonPressed = true;
   BUTTON_FLAG_SET(FLAG_BUTTON_PRESSED);
   enqueueKeyEvent(buttonPressedEvent);
 }
 
 void fTriggerPressed() {
   DPRINTLN("Trigger pressed.");
-//  triggerPressed = true;
   BUTTON_FLAG_SET(FLAG_TRIGGER_PRESSED);
   enqueueKeyEvent(triggerPressedEvent);
 }
 
 void fDoubleClick() {
   DPRINTLN("Double click.");
-//  buttonDoubleClicked = true;
   BUTTON_FLAG_SET(FLAG_BUTTON_DOUBLE_CLICKED);
   enqueueKeyEvent(buttonDoubleClickedEvent);
 }
 
 void fLongPressStart() {
   DPRINTLN("Long press start.");
-//  buttonLongPressStarted = true;
   BUTTON_FLAG_SET(FLAG_BUTTON_LONG_PRESS_STARTED);
   enqueueKeyEvent(triggerPressedEvent);
 }
 
 void clearButtons() {
-//  buttonPressed = false;
-//  buttonClicked = false;
-//  buttonDoubleClicked = false;
-//  buttonLongPressStarted = false;
-//  triggerPressed = false;
   buttonFlags = 0;
 }
 
@@ -174,15 +164,11 @@ void PWMCallback(uint8_t pin, uint16_t value) {
   }
 }
 
-volatile PWMCallbackFP pwmCallbackPtr = PWMCallback;
-
 // Called by seesaw when reset. Return to controller logic.
 void SeesawReset() {
   DPRINTLN("Seesaw reset called.");
   peripheralMode = false;
 }
-
-volatile SeesawResetFP seesawResetPtr = SeesawReset;
 
 // End DOA_seesawCompatibility callbacks
 
@@ -192,25 +178,35 @@ volatile SeesawResetFP seesawResetPtr = SeesawReset;
  **********
 */
 
-const uint8_t CONSTANT_0 = 0;
-const uint8_t CONSTANT_20 = 1;
-const uint8_t CONSTANT_40 = 2;
-const uint8_t CONSTANT_60 = 3;
-const uint8_t CONSTANT_80 = 4;
-const uint8_t CONSTANT_100 = 5;
-const uint8_t STROBE_1 = 6;
-const uint8_t STROBE_3 = 7;
-const uint8_t STROBE_7 = 8;
+const uint8_t CONSTANT_0 = 14;
+const uint8_t CONSTANT_20 = 15;
+const uint8_t CONSTANT_40 = 16;
+const uint8_t CONSTANT_60 = 17;
+const uint8_t CONSTANT_80 = 18;
+const uint8_t CONSTANT_100 = 19;
+const uint8_t STROBE_1 = 20;
+const uint8_t STROBE_3 = 21;
+const uint8_t STROBE_7 = 22;
 const uint8_t STROBE_12 = 9;
 const uint8_t STROBE_20 = 10;
 const uint8_t SPARKLE_1 = 11;
 const uint8_t SPARKLE_2 = 12;
 const uint8_t SPARKLE_3 = 13;
-const uint8_t FLICKER_1 = 14;
-const uint8_t EFFECTS_COUNT = 15; // keep this at the end
+const uint8_t FLICKER_OFF_1 = 6;
+const uint8_t FLICKER_OFF_2 = 7;
+const uint8_t FLICKER_OFF_3 = 8;
+const uint8_t FLICKER_ON_FAST_1 = 3;
+const uint8_t FLICKER_ON_FAST_2 = 4;
+const uint8_t FLICKER_ON_FAST_3 = 5;
+const uint8_t FLICKER_ON_SLOW_1 = 0;
+const uint8_t FLICKER_ON_SLOW_2 = 1;
+const uint8_t FLICKER_ON_SLOW_3 = 2;
+const uint8_t EFFECTS_COUNT = 23; // keep this at the end
 
-uint8_t ambientEffect = CONSTANT_0;
-uint8_t triggeredEffect = CONSTANT_0;
+const uint8_t DEFAULT_EFFECT = 0;   // there should always be an effect with index 0
+
+uint8_t ambientEffect = DEFAULT_EFFECT;
+uint8_t triggeredEffect = DEFAULT_EFFECT;
 uint32_t triggeredLengthMillis = 0;
 
 // EEPROM Addresses
@@ -235,7 +231,15 @@ Dimmer strobe20 = Dimmer(PWM_OUTPUT);
 Sparkle sparkle1 = Sparkle(PWM_OUTPUT);
 Sparkle sparkle2 = Sparkle(PWM_OUTPUT);
 Sparkle sparkle3 = Sparkle(PWM_OUTPUT);
-Flicker flicker1 = Flicker(PWM_OUTPUT);
+FlickerOff flickerOff1 = FlickerOff(PWM_OUTPUT);
+FlickerOff flickerOff2 = FlickerOff(PWM_OUTPUT);
+FlickerOff flickerOff3 = FlickerOff(PWM_OUTPUT);
+FlickerOn flickerOnFast1 = FlickerOn(PWM_OUTPUT);
+FlickerOn flickerOnFast2 = FlickerOn(PWM_OUTPUT);
+FlickerOn flickerOnFast3 = FlickerOn(PWM_OUTPUT);
+FlickerOn flickerOnSlow1 = FlickerOn(PWM_OUTPUT);
+FlickerOn flickerOnSlow2 = FlickerOn(PWM_OUTPUT);
+FlickerOn flickerOnSlow3 = FlickerOn(PWM_OUTPUT);
 
 void logCurrentEffect() {
   switch (currentEffect) {
@@ -295,8 +299,40 @@ void logCurrentEffect() {
       DPRINTLN("Current effect: SPARKLE_3");
       break;
 
-    case FLICKER_1:
-      DPRINTLN("Current effect: FLICKER_1");
+    case FLICKER_OFF_1:
+      DPRINTLN("Current effect: FLICKER_OFF_1");
+      break;
+
+    case FLICKER_OFF_2:
+      DPRINTLN("Current effect: FLICKER_OFF_2");
+      break;
+
+    case FLICKER_OFF_3:
+      DPRINTLN("Current effect: FLICKER_OFF_3");
+      break;
+
+    case FLICKER_ON_FAST_1:
+      DPRINTLN("Current effect: FLICKER_ON_FAST_1");
+      break;
+
+    case FLICKER_ON_FAST_2:
+      DPRINTLN("Current effect: FLICKER_ON_FAST_2");
+      break;
+
+    case FLICKER_ON_FAST_3:
+      DPRINTLN("Current effect: FLICKER_ON_FAST_3");
+      break;
+
+    case FLICKER_ON_SLOW_1:
+      DPRINTLN("Current effect: FLICKER_ON_SLOW_1");
+      break;
+
+    case FLICKER_ON_SLOW_2:
+      DPRINTLN("Current effect: FLICKER_ON_SLOW_2");
+      break;
+
+    case FLICKER_ON_SLOW_3:
+      DPRINTLN("Current effect: FLICKER_ON_SLOW_3");
       break;
 
     default:
@@ -357,7 +393,35 @@ void intializeEffects() {
   sparkle3.setIntensity(3);
   effects[SPARKLE_3] = &sparkle3;
 
-  effects[FLICKER_1] = &flicker1;
+  effects[FLICKER_OFF_1] = &flickerOff1;
+
+  flickerOff2.setBrightness(158);
+  effects[FLICKER_OFF_2] = &flickerOff2;
+
+  flickerOff3.setBrightness(50);
+  effects[FLICKER_OFF_3] = &flickerOff3;
+
+  effects[FLICKER_ON_FAST_1] = &flickerOnFast1;
+
+  flickerOnFast2.setBaseBrightness(51); // ~20%
+  effects[FLICKER_ON_FAST_2] = &flickerOnFast2;
+
+  flickerOnFast3.setBaseBrightness(102); // ~40%
+  effects[FLICKER_ON_FAST_3] = &flickerOnFast3;
+
+  flickerOnSlow1.setIntensity(50);
+  flickerOnSlow1.setThreshold(46);
+  effects[FLICKER_ON_SLOW_1] = &flickerOnSlow1;
+
+  flickerOnSlow2.setBaseBrightness(51); // ~20%
+  flickerOnSlow2.setIntensity(50);
+  flickerOnSlow2.setThreshold(46);
+  effects[FLICKER_ON_SLOW_2] = &flickerOnSlow2;
+
+  flickerOnSlow3.setBaseBrightness(102); // ~40%
+  flickerOnSlow3.setIntensity(50);
+  flickerOnSlow3.setThreshold(46);
+  effects[FLICKER_ON_SLOW_3] = &flickerOnSlow3;
 }
 
 void setEffect(uint8_t type) {
@@ -379,14 +443,16 @@ void setEffect(uint8_t type) {
   }
 }
 
-void nextEffect() {
+uint8_t nextEffect() {
   uint8_t nextEffect = currentEffect + 1;
   
   if (nextEffect >= EFFECTS_COUNT) {
-    nextEffect =  CONSTANT_0;
+    nextEffect =  DEFAULT_EFFECT;
   }
 
   setEffect(nextEffect);
+
+  return nextEffect;
 }
 
 /*
@@ -425,6 +491,8 @@ void ambientStateEnter()
   DPRINTLN("Ambient enter");
   clearButtons();
 
+  previousMillis = currentMillis;
+
   leds.setPixelColor(0, COLOR_GREEN_75); // green
   leds.show();
 
@@ -433,25 +501,31 @@ void ambientStateEnter()
 
 void ambientStateUpdate()
 {
+  if (!ambientEffectSaved) {
+    if (ambientEffectSettleTime < (currentMillis - previousMillis)) {
+      // save the ambient effect
+      EEPROM.put(ADDR_AMBIENT_EFFECT, ambientEffect);
+      DPRINTLN("Saved ambient effect to EEPROM in update.");
+      ambientEffectSaved = true;
+    }
+  }
+
   // state transition
   if (peripheralMode) {
     clearButtons();
     stateMachine.goToState(&peripheralState);
     return;
-//  } else if (buttonClicked) {
   } else if (BUTTON_FLAG(FLAG_BUTTON_CLICKED)) {
     clearButtons();
 
     previousMillis = currentMillis;
     DPRINTLN("Ambient going to next effect.");
-    nextEffect();
-    ambientEffect = currentEffect;
-    EEPROM.put(ADDR_AMBIENT_EFFECT, ambientEffect);
-//  } else if (buttonDoubleClicked || triggerPressed) {
+    ambientEffect = nextEffect();
+    // wait for selected ambient effect to "settle"
+    ambientEffectSaved = false;
   } else if (BUTTON_FLAG(FLAG_BUTTON_DOUBLE_CLICKED) || BUTTON_FLAG(FLAG_TRIGGER_PRESSED)) {
     stateMachine.goToState(&triggeredState);
     return;
-//  } else if (buttonLongPressStarted) {
   } else if (BUTTON_FLAG(FLAG_BUTTON_LONG_PRESS_STARTED)) {
     clearButtons();
 
@@ -463,6 +537,12 @@ void ambientStateUpdate()
 
 void ambientStateExit()
 {
+  if (!ambientEffectSaved) {
+    // save the ambient effect before exiting the ambient state
+    EEPROM.put(ADDR_AMBIENT_EFFECT, ambientEffect);
+    DPRINTLN("Saved ambient effect to EEPROM in exit.");
+    ambientEffectSaved = true;
+  }
   DPRINTLN("Ambient exit");
 }
 
@@ -549,7 +629,6 @@ void recordTriggerUpdate() {
     leds.setPixelColor(0, COLOR_RED); // red
     leds.show();
   } else {
-//    if ((buttonClicked) || ((currentMillis - previousMillis) >= MILLIS_30_MINUTES)) {
     if (BUTTON_FLAG(FLAG_BUTTON_CLICKED) || ((currentMillis - previousMillis) >= MILLIS_30_MINUTES)) {
       // stop recording trigger
       triggeredLengthMillis = currentMillis - previousMillis;
@@ -595,6 +674,10 @@ void setup() {
   pinMode(PWM_OUTPUT, OUTPUT);
   pinModeFast(NEOPIXEL, OUTPUT);
 
+  // Seesaw setup
+  DOA_seesawCompatibility_setPWMCallback(&PWMCallback);
+  DOA_seesawCompatibility_setSeesawReset(&SeesawReset);
+
   intializeEffects();
 
   button.setup(PIN_BUTTON);
@@ -623,14 +706,14 @@ void setup() {
   DPRINT("Got ambient effect from eeprom: ");
   DPRINTLN(ambientEffect);
   if (ambientEffect >= EFFECTS_COUNT) {
-    ambientEffect = CONSTANT_0;
+    ambientEffect = DEFAULT_EFFECT;
   }
   DPRINTLN("Getting triggered effect from eeprom");
   EEPROM.get(ADDR_TRIGGERED_EFFECT, triggeredEffect);
   DPRINT("Got triggered effect from eeprom: ");
   DPRINTLN(triggeredEffect);
   if (triggeredEffect >= EFFECTS_COUNT) {
-    triggeredEffect = CONSTANT_0;
+    triggeredEffect = DEFAULT_EFFECT;
   }
   DPRINTLN("Getting triggered length millis from eeprom: ");
   DPRINTLN(EEPROM.get(ADDR_TRIGGERED_LENGTH, triggeredLengthMillis));
@@ -644,7 +727,7 @@ void setup() {
   DPRINTLN(F("Begin seesaw compatibility."));
   DOA_seesawCompatibility_begin();
 
-  setEffect(CONSTANT_0);
+  setEffect(DEFAULT_EFFECT);
   stateMachine.goToState(&startupState);
 }
 

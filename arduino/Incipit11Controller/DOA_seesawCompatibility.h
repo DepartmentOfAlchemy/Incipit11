@@ -19,13 +19,13 @@
 // Define in controller.
 extern volatile uint32_t g_bufferedBulkGPIORead;
 
+// Callback function for setting PWM. (uint8_t pin, uint16_t value)
 typedef void (*PWMCallbackFP)(uint8_t, uint16_t);
-
-extern volatile PWMCallbackFP pwmCallbackPtr;
-
+// Callback function for notification when a software reset occurs
 typedef void (*SeesawResetFP)();
 
-extern volatile SeesawResetFP seesawResetPtr;
+PWMCallbackFP _pwmCallbackPtr = NULL;
+SeesawResetFP _seesawResetPtr = NULL;
 
 // Will be set to the date that the executable was compiled.
 uint16_t DATE_CODE = 0;
@@ -129,6 +129,8 @@ void DOA_seesawCompatibility_reset(void);
 void receiveData(int numBytes);
 void requestData(void);
 void DOA_seesawCompatibility_run(void);
+void DOA_seesawCompatibility_setPWMCallback(PWMCallbackFP pwmCallbackPtr);
+void DOA_seesawCompatibility_setSeesawReset(SeesawResetFP seesawResetPtr);
 
 void DOA_seesawCompatibility_setDatecode(void) {
   char buf[12];
@@ -170,7 +172,9 @@ bool DOA_seesawCompatibility_begin(void) {
 void DOA_seesawCompatibility_reset(void) {
   DOA_seesawCompatibility_setDatecode();
 
-  seesawResetPtr();
+  if (_seesawResetPtr != NULL) {
+    _seesawResetPtr();
+  }
 
   DPRINTLN(F("Wire end"));
   Wire.end();
@@ -214,18 +218,29 @@ void DOA_seesawCompatibility_run(void) {
   // nothing done in this function yet. available for future enhancement.
 }
 
+/**
+* Set the callback for handling PWM requests.
+*/
+void DOA_seesawCompatibility_setPWMCallback(PWMCallbackFP pwmCallbackPtr) {
+  _pwmCallbackPtr = pwmCallbackPtr;
+}
+
+/**
+* Set the callback called where there is a software reset.
+*/
+void DOA_seesawCompatibility_setSeesawReset(SeesawResetFP seesawResetPtr) {
+  _seesawResetPtr = seesawResetPtr;
+}
+
 // --- I2C support ---
 void receiveData(int numBytes) {
-//  DPRINT(F("Received "));
-//  DPRINT(numBytes);
-//  DPRINT(F(" bytes: "));
   for (uint8_t i = numBytes; i < sizeof(i2c_buffer); i++) {
     i2c_buffer[i] = 0;
   }
 
   // check to see if number of bytes received is more than allocated in the buffer
   if ((uint32_t)numBytes > sizeof(i2c_buffer)) {
-    DPRINTLN();
+    DPRINTLN(F("Requested more bytes than allocated in the buffer."));
     return;
   }
 
@@ -236,10 +251,6 @@ void receiveData(int numBytes) {
 
   uint8_t base_cmd = i2c_buffer[0];
   uint8_t module_cmd = i2c_buffer[1];
-//  DPRINT(F("Base command: "));
-//  DPRINT(base_cmd, HEX);
-//  DPRINT(F(", module command: "));
-//  DPRINTLN(module_cmd, HEX);
 
   if (base_cmd == SEESAW_STATUS_BASE) {
     if (module_cmd == SEESAW_STATUS_SWRST) {
@@ -250,16 +261,8 @@ void receiveData(int numBytes) {
     if (module_cmd == SEESAW_TIMER_PWM) {
       uint8_t pin = i2c_buffer[2];
       uint16_t value = (i2c_buffer[3] << 8) + i2c_buffer[4];
-      DPRINT("Set PWM. Pin: ");
-      DPRINT(pin);
-      DPRINT(", Value: ");
-      DPRINT(value);
-      DPRINT(", 8 bit value: ");
-      DPRINT(value & 0xFF);
-      DPRINT(", Value bits: ");
-      DPRINTLN(value, BIN);
-      if (pwmCallbackPtr != NULL) {
-        pwmCallbackPtr(pin, value);
+      if (_pwmCallbackPtr != NULL) {
+        _pwmCallbackPtr(pin, value);
       }
     }
   }
@@ -286,10 +289,6 @@ void requestData(void) {
   } else if (base_cmd == SEESAW_KEYPAD_BASE) {
     if (module_cmd == SEESAW_KEYPAD_COUNT) {
       DOA_seesawCompatibility_write8(keyCount);
-      if (keyCount > 0) {
-        DPRINT(F("Keypad count: "));
-        DPRINTLN(keyCount);
-      }
     } else if (module_cmd == SEESAW_KEYPAD_FIFO) {
       while (keyCount > 0) {
         DOA_seesawCompatibility_write8(dequeueKeyEvent().reg);
