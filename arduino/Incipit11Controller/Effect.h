@@ -24,6 +24,29 @@ const uint8_t gamma_lut[256] = {
    223, 225, 227, 229, 231, 234, 236, 238, 240, 242, 244, 246, 248, 251, 253, 255,
   };
 
+const uint8_t sineLookupTable[] = {
+   128, 136, 143, 151, 159, 167, 174, 182,
+   189, 196, 202, 209, 215, 220, 226, 231,
+   235, 239, 243, 246, 249, 251, 253, 254,
+   255, 255, 255, 254, 253, 251, 249, 246,
+   243, 239, 235, 231, 226, 220, 215, 209,
+   202, 196, 189, 182, 174, 167, 159, 151,
+   143, 136, 128, 119, 112, 104,  96,  88,
+    81,  73,  66,  59,  53,  46,  40,  35,
+    29,  24,  20,  16,  12,   9,   6,   4,
+     2,   1,   0,   0,   0,   1,   2,   4,
+     6,   9,  12,  16,  20,  24,  29,  35,
+    40,  46,  53,  59,  66,  73,  81,  88,
+    96, 104, 112, 119,
+  };
+
+const uint8_t sineLookupTableLength = 100;
+
+const uint8_t heartbeatStart = 76;
+const uint8_t heartbeatEnd   = 74;
+
+const uint8_t heartbeatLookupTableLength = 99;
+
 const unsigned long MILLISECONDS_PER_SECOND = 1000;
 
 class Effect {
@@ -187,7 +210,7 @@ public:
     uint16_t max;
 
     if (_intensity == 0) {
-      // constrant
+      // constant
       if (_lastBrightness != _brightness) {
         analogWrite(_pin, gamma_lut[_brightness]);
         _lastBrightness = _brightness;
@@ -400,5 +423,217 @@ protected:
   uint8_t _baseBrightness;
   unsigned long transitionPeriod;
   unsigned long lastTransitionTime;
+};
+
+class SineWave : public Effect {
+public:
+  SineWave(uint8_t pin) : Effect(pin) {
+    _brightness = 0;
+    _frequency = 0;
+    _denominator = 1;
+    _minimumBrightness = 0;
+    transitionPeriod = 0;
+    lastTransitionTime = 0;
+    index = 0;
+
+    // initialize to off
+    analogWrite(_pin, _brightness);
+    _lastBrightness = _brightness;
+  }
+
+  uint16_t getFrequency() {
+    return _frequency;
+  }
+
+  void setFrequency(uint16_t frequency, uint8_t denominator = 1) {
+    if (frequency > 1400) {
+      frequency = 1400;
+    }
+    _frequency = frequency;
+    _denominator = denominator;
+
+    if (frequency > 0) {
+      // convert frequency into transition period
+      // (period is equally divided into 100 points in lookup table)
+      transitionPeriod = (MILLISECONDS_PER_SECOND / frequency) / (sineLookupTableLength / denominator);
+    }
+  }
+
+  uint8_t getFrequencyDenominator() {
+    return _denominator;
+  }
+
+  void setMinimumBrightness(uint8_t minimumBrightness) {
+    _minimumBrightness = minimumBrightness;
+  }
+
+  uint8_t getMinimumBrightness() {
+    return _minimumBrightness;
+  }
+
+  void enter() override {
+    // set to turn on if strobing on next update()
+    lastTransitionTime = 0;
+
+    index = 0;
+
+    _lastBrightness = 0;
+    // edge condition
+    // in update, since _brightness == _lastBrightness it would never set the output off
+    if (_brightness == 0) {
+      analogWrite(_pin, _brightness);
+    }
+  }
+
+  void update(unsigned long now = 0) override {
+    uint8_t actualBrightness;
+
+    if (_frequency == 0) {
+      // constant
+      if (_lastBrightness != _brightness) {
+        analogWrite(_pin, gamma_lut[_brightness]);
+        _lastBrightness = _brightness;
+      }
+    } else {
+      // sine output
+      if (now == 0) {
+        now = millis();
+      }
+
+      if (now >= (lastTransitionTime + transitionPeriod)) {
+        lastTransitionTime = now;
+
+        actualBrightness = sineLookupTable[index];
+        if (actualBrightness < _minimumBrightness) {
+          actualBrightness = _minimumBrightness;
+        }
+
+        analogWrite(_pin, gamma_lut[actualBrightness]);
+        _lastBrightness = actualBrightness;
+
+        index++;
+        if (index >= sineLookupTableLength) {
+          index = 0;
+        }
+      }
+    }
+  }
+
+  ~SineWave() override {}
+
+protected:
+  uint8_t _lastBrightness;
+  uint16_t _frequency;
+  uint8_t _denominator;
+  uint8_t _minimumBrightness;
+  unsigned long transitionPeriod;
+  unsigned long lastTransitionTime;
+  uint8_t index;
+};
+
+class Heartbeat : public Effect {
+public:
+  Heartbeat(uint8_t pin) : Effect(pin) {
+    _brightness = 0;
+    frequency = 2; // hardcoded frequency of beats
+    transitionPeriod = 0;
+    lastTransitionTime = 0;
+    index = heartbeatStart;
+    beats = 2; // number of sequential beats
+    beat = 0;  // keep track of which beat
+    _space = 2000; // default to 2 second interval between beats
+
+    // convert frequency into transition period
+    // (period is equally divided into 100 points in lookup table)
+    transitionPeriod = (MILLISECONDS_PER_SECOND / frequency) / 99;
+
+    // initialize to off
+    analogWrite(_pin, _brightness);
+    _lastBrightness = _brightness;
+  }
+
+  uint32_t getSpace() {
+    return _space;
+  }
+
+  void setSpace(uint32_t space) {
+    _space = space;
+  }
+
+  void enter() override {
+    // set to turn on if strobing on next update()
+    lastTransitionTime = 0;
+
+    index = heartbeatStart;
+    beat = 0;
+
+    _lastBrightness = 0;
+    // edge condition
+    // in update, since _brightness == _lastBrightness it would never set the output off
+    if (_brightness == 0) {
+      analogWrite(_pin, _brightness);
+    }
+  }
+
+  void update(unsigned long now = 0) override {
+    if (frequency == 0) {
+      // constant
+      if (_lastBrightness != _brightness) {
+        analogWrite(_pin, gamma_lut[_brightness]);
+        _lastBrightness = _brightness;
+      }
+    } else {
+      // heartbeat output
+      if (now == 0) {
+        now = millis();
+      }
+
+      if (beat < beats) {
+        // heartbeat
+        if (now >= (lastTransitionTime + transitionPeriod)) {
+          lastTransitionTime = now;
+
+          analogWrite(_pin, gamma_lut[sineLookupTable[index]]);
+          _lastBrightness = sineLookupTable[index];
+
+          index++;
+          if (index >= heartbeatLookupTableLength) {
+            index = 0;
+          }
+
+          if (index == heartbeatEnd) {
+            beat++;
+            index = heartbeatStart;
+          }
+        }
+      } else {
+        // space
+        if (_lastBrightness != _brightness) {
+          analogWrite(_pin, gamma_lut[_brightness]);
+          _lastBrightness = _brightness;
+        }
+
+        if (now >= (lastTransitionTime + _space)) {
+          // end of space
+          lastTransitionTime = now;
+
+          beat = 0;
+          index = heartbeatStart; // for good measure
+        }
+      }
+    }
+  }
+
+  ~Heartbeat() override {}
+
+protected:
+  uint8_t _lastBrightness;
+  uint16_t frequency;
+  unsigned long transitionPeriod;
+  unsigned long lastTransitionTime;
+  uint32_t _space;
+  uint8_t index;
+  uint8_t beats;
+  uint8_t beat;
 };
 #endif

@@ -138,7 +138,7 @@ void clearButtons() {
 //
 // DOA_seesawCompatibility callbacks
 //
-// Peripheral mode (set by seesaw controller settin an output value)
+// Peripheral mode (set by seesaw controller setting an output value)
 
 bool peripheralMode = false;
 
@@ -147,61 +147,48 @@ bool peripheralMode = false;
 // standard set of effects.
 Dimmer peripheralDimmer = Dimmer(PWM_OUTPUT);
 
-// Called by seesaw to "overide" the built in controller logic.
-// Transition to peripheral state when an external controller is setting the
-// output value until soft reset.
-void PWMCallback(uint8_t pin, uint16_t value) {
-  DPRINT("PWMCallback Pin: ");
-  DPRINT(pin);
-  DPRINT(", Value: ");
-  DPRINT(value);
-  DPRINT(", 8 bit value: ");
-  DPRINTLN(value & 0xFF);
-
-  if (pin == 0) {
-    peripheralMode = true;
-    peripheralDimmer.setBrightness(value & 0xFF); // convert from 16 bit to 8 bit
-  }
-}
-
-// Called by seesaw when reset. Return to controller logic.
-void SeesawReset() {
-  DPRINTLN("Seesaw reset called.");
-  peripheralMode = false;
-}
-
-// End DOA_seesawCompatibility callbacks
-
 /*
  **********
  * Effects
  **********
 */
 
-const uint8_t CONSTANT_0 = 14;
-const uint8_t CONSTANT_20 = 15;
-const uint8_t CONSTANT_40 = 16;
-const uint8_t CONSTANT_60 = 17;
-const uint8_t CONSTANT_80 = 18;
-const uint8_t CONSTANT_100 = 19;
-const uint8_t STROBE_1 = 20;
-const uint8_t STROBE_3 = 21;
-const uint8_t STROBE_7 = 22;
-const uint8_t STROBE_12 = 9;
-const uint8_t STROBE_20 = 10;
-const uint8_t SPARKLE_1 = 11;
-const uint8_t SPARKLE_2 = 12;
-const uint8_t SPARKLE_3 = 13;
-const uint8_t FLICKER_OFF_1 = 6;
-const uint8_t FLICKER_OFF_2 = 7;
-const uint8_t FLICKER_OFF_3 = 8;
-const uint8_t FLICKER_ON_FAST_1 = 3;
-const uint8_t FLICKER_ON_FAST_2 = 4;
-const uint8_t FLICKER_ON_FAST_3 = 5;
-const uint8_t FLICKER_ON_SLOW_1 = 0;
-const uint8_t FLICKER_ON_SLOW_2 = 1;
-const uint8_t FLICKER_ON_SLOW_3 = 2;
-const uint8_t EFFECTS_COUNT = 23; // keep this at the end
+const uint8_t CONSTANT_0 = 33;
+const uint8_t CONSTANT_20 = 34;
+const uint8_t CONSTANT_40 = 3;
+const uint8_t CONSTANT_60 = 4;
+const uint8_t CONSTANT_80 = 5;
+const uint8_t CONSTANT_100 = 6;
+const uint8_t STROBE_1 = 7;
+const uint8_t STROBE_3 = 8;
+const uint8_t STROBE_7 = 9;
+const uint8_t STROBE_12 = 10;
+const uint8_t STROBE_20 = 11;
+const uint8_t SPARKLE_1 = 12;
+const uint8_t SPARKLE_2 = 13;
+const uint8_t SPARKLE_3 = 14;
+const uint8_t FLICKER_OFF_1 = 15;
+const uint8_t FLICKER_OFF_2 = 16;
+const uint8_t FLICKER_OFF_3 = 17;
+const uint8_t FLICKER_ON_FAST_1 = 18;
+const uint8_t FLICKER_ON_FAST_2 = 19;
+const uint8_t FLICKER_ON_FAST_3 = 20;
+const uint8_t FLICKER_ON_SLOW_1 = 21;
+const uint8_t FLICKER_ON_SLOW_2 = 22;
+const uint8_t FLICKER_ON_SLOW_3 = 23;
+const uint8_t SINE_WAVE_1 = 24;
+const uint8_t SINE_WAVE_2 = 25;
+const uint8_t SINE_WAVE_3 = 26;
+const uint8_t SINE_WAVE_MIN_20_1 = 27;
+const uint8_t SINE_WAVE_MIN_20_2 = 28;
+const uint8_t SINE_WAVE_MIN_20_3 = 29;
+const uint8_t SINE_WAVE_MIN_40_1 = 30;
+const uint8_t SINE_WAVE_MIN_40_2 = 31;
+const uint8_t SINE_WAVE_MIN_40_3 = 32;
+const uint8_t HEARTBEAT_1 = 0;
+const uint8_t HEARTBEAT_2 = 1;
+const uint8_t HEARTBEAT_3 = 2;
+const uint8_t EFFECTS_COUNT = 35; // keep this at the end
 
 const uint8_t DEFAULT_EFFECT = 0;   // there should always be an effect with index 0
 
@@ -240,6 +227,18 @@ FlickerOn flickerOnFast3 = FlickerOn(PWM_OUTPUT);
 FlickerOn flickerOnSlow1 = FlickerOn(PWM_OUTPUT);
 FlickerOn flickerOnSlow2 = FlickerOn(PWM_OUTPUT);
 FlickerOn flickerOnSlow3 = FlickerOn(PWM_OUTPUT);
+SineWave sineWave1 = SineWave(PWM_OUTPUT);
+SineWave sineWave2 = SineWave(PWM_OUTPUT);
+SineWave sineWave3 = SineWave(PWM_OUTPUT);
+SineWave sineWaveMin201 = SineWave(PWM_OUTPUT);
+SineWave sineWaveMin202 = SineWave(PWM_OUTPUT);
+SineWave sineWaveMin203 = SineWave(PWM_OUTPUT);
+SineWave sineWaveMin401 = SineWave(PWM_OUTPUT);
+SineWave sineWaveMin402 = SineWave(PWM_OUTPUT);
+SineWave sineWaveMin403 = SineWave(PWM_OUTPUT);
+Heartbeat heartbeat1 = Heartbeat(PWM_OUTPUT);
+Heartbeat heartbeat2 = Heartbeat(PWM_OUTPUT);
+Heartbeat heartbeat3 = Heartbeat(PWM_OUTPUT);
 
 void logCurrentEffect() {
   switch (currentEffect) {
@@ -335,6 +334,54 @@ void logCurrentEffect() {
       DPRINTLN("Current effect: FLICKER_ON_SLOW_3");
       break;
 
+    case SINE_WAVE_1:
+      DPRINTLN("Current effect: SINE_WAVE_1");
+      break;
+
+    case SINE_WAVE_2:
+      DPRINTLN("Current effect: SINE_WAVE_2");
+      break;
+
+    case SINE_WAVE_3:
+      DPRINTLN("Current effect: SINE_WAVE_3");
+      break;
+
+    case SINE_WAVE_MIN_20_1:
+      DPRINTLN("Current effect: SINE_WAVE_MIN_20_1");
+      break;
+
+    case SINE_WAVE_MIN_20_2:
+      DPRINTLN("Current effect: SINE_WAVE_MIN_20_2");
+      break;
+
+    case SINE_WAVE_MIN_20_3:
+      DPRINTLN("Current effect: SINE_WAVE_MIN_20_3");
+      break;
+
+    case SINE_WAVE_MIN_40_1:
+      DPRINTLN("Current effect: SINE_WAVE_MIN_40_1");
+      break;
+
+    case SINE_WAVE_MIN_40_2:
+      DPRINTLN("Current effect: SINE_WAVE_MIN_40_2");
+      break;
+
+    case SINE_WAVE_MIN_40_3:
+      DPRINTLN("Current effect: SINE_WAVE_MIN_40_3");
+      break;
+
+    case HEARTBEAT_1:
+      DPRINTLN("Current effect: HEARTBEAT_1");
+      break;
+
+    case HEARTBEAT_2:
+      DPRINTLN("Current effect: HEARTBEAT_2");
+      break;
+
+    case HEARTBEAT_3:
+      DPRINTLN("Current effect: HEARTBEAT_3");
+      break;
+
     default:
       DPRINT("Current effect (unknown): ");
       DPRINTLN(currentEffect);
@@ -422,6 +469,51 @@ void intializeEffects() {
   flickerOnSlow3.setIntensity(50);
   flickerOnSlow3.setThreshold(46);
   effects[FLICKER_ON_SLOW_3] = &flickerOnSlow3;
+
+  sineWave1.setFrequency(2);
+  effects[SINE_WAVE_1] = &sineWave1;
+
+  sineWave2.setFrequency(1, 2);
+  effects[SINE_WAVE_2] = &sineWave2;
+
+  sineWave3.setFrequency(1, 4);
+  effects[SINE_WAVE_3] = &sineWave3;
+
+  sineWaveMin201.setFrequency(1);
+  sineWaveMin201.setMinimumBrightness(51); // ~20%
+  effects[SINE_WAVE_MIN_20_1] = &sineWaveMin201;
+
+  sineWaveMin202.setFrequency(1, 2);
+  sineWaveMin202.setMinimumBrightness(51); // ~20%
+  effects[SINE_WAVE_MIN_20_2] = &sineWaveMin202;
+
+  sineWaveMin203.setFrequency(1, 4);
+  sineWaveMin203.setMinimumBrightness(51); // ~20%
+  effects[SINE_WAVE_MIN_20_3] = &sineWaveMin203;
+
+  sineWaveMin401.setFrequency(1);
+  sineWaveMin401.setMinimumBrightness(102); // ~40%
+  effects[SINE_WAVE_MIN_40_1] = &sineWaveMin401;
+
+  sineWaveMin402.setFrequency(1, 2);
+  sineWaveMin402.setMinimumBrightness(102); // ~40%
+  effects[SINE_WAVE_MIN_40_2] = &sineWaveMin402;
+
+  sineWaveMin403.setFrequency(1, 4);
+  sineWaveMin403.setMinimumBrightness(102); // ~40%
+  effects[SINE_WAVE_MIN_40_3] = &sineWaveMin403;
+
+  heartbeat1.setBrightness(0);
+  heartbeat1.setSpace(500); // 1/2 second
+  effects[HEARTBEAT_1] = &heartbeat1;
+
+  heartbeat2.setBrightness(0);
+  heartbeat2.setSpace(1000); // 1 second
+  effects[HEARTBEAT_2] = &heartbeat2;
+
+  heartbeat3.setBrightness(0);
+  heartbeat3.setSpace(2000); // 2 seconds
+  effects[HEARTBEAT_3] = &heartbeat3;
 }
 
 void setEffect(uint8_t type) {
@@ -668,6 +760,97 @@ void peripheralStateExit() {
   DPRINTLN("Peripheral exit");
 }
 
+// Called by seesaw to "overide" the built in controller logic.
+// Transition to peripheral state when an external controller is setting the
+// output value until soft reset.
+void PWMCallback(uint8_t pin, uint16_t value) {
+  DPRINT("PWMCallback Pin: ");
+  DPRINT(pin);
+  DPRINT(", Value: ");
+  DPRINT(value);
+  DPRINT(", 8 bit value: ");
+  DPRINTLN(value & 0xFF);
+
+  if (pin == 0) {
+    peripheralMode = true;
+    peripheralDimmer.setBrightness(value & 0xFF); // convert from 16 bit to 8 bit
+  }
+}
+
+// Called by seesaw when reset. Return to controller logic.
+void SeesawReset() {
+  DPRINTLN("Seesaw reset called.");
+  peripheralMode = false;
+}
+
+// Called by seesaw to read the peripheral EEPROM. Convert to values that
+// Incipit11 uses to store ambient and trigger data.
+uint8_t EEPROMReadCallback(uint8_t addr) {
+  if (addr == ADDR_AMBIENT_EFFECT) {
+    return currentEffect;
+  } else if (addr == ADDR_TRIGGERED_EFFECT) {
+    return triggeredEffect;
+  }  else if (addr == ADDR_TRIGGERED_LENGTH) {
+    uint8_t value = (triggeredLengthMillis >> 24) & 0x000000FF;
+    return value;
+  }  else if (addr == ADDR_TRIGGERED_LENGTH + 1) {
+    uint8_t value = (triggeredLengthMillis >> 16) & 0x000000FF;
+    return value;
+  }  else if (addr == ADDR_TRIGGERED_LENGTH + 2) {
+    uint8_t value = (triggeredLengthMillis >> 8) & 0x000000FF;
+    return value;
+  }  else if (addr == ADDR_TRIGGERED_LENGTH + 3) {
+    uint8_t value = triggeredLengthMillis & 0x000000FF;
+    return value;
+  }
+  return 0;
+}
+
+// Called by seesaw to write the peripheral EEPROM. Convert to values that
+// Incipit11 uses to store ambient and trigger data.
+void EEPROMWriteCallback(uint8_t addr, uint8_t *buf, uint8_t size) {
+  if (addr == ADDR_AMBIENT_EFFECT) {
+    if (size >= 1) {
+      uint8_t value = buf[0];
+      if (value < EFFECTS_COUNT) {
+        ambientEffect = value;
+        EEPROM.put(ADDR_AMBIENT_EFFECT, ambientEffect);
+        DPRINT("Saved ambient effect to EEPROM in update: ");
+        DPRINTLN(ambientEffect);
+        ambientEffectSaved = true;
+        if (stateMachine.isCurrentState(&ambientState)) {
+          setEffect(ambientEffect);
+        }
+      }
+    }
+  } else if (addr == ADDR_TRIGGERED_EFFECT) {
+    if (size >= 1) {
+      uint8_t value = buf[0];
+      if (value < EFFECTS_COUNT) {
+        triggeredEffect = value;
+        EEPROM.put(ADDR_TRIGGERED_EFFECT, triggeredEffect);
+        DPRINT("Saved triggered effect to EEPROM in update: ");
+        DPRINTLN(triggeredEffect);
+      }
+    }
+  } else if (addr == ADDR_TRIGGERED_LENGTH) {
+    if (size >= 4) {
+      triggeredLengthMillis = ((uint32_t)buf[0] << 24) |
+                              ((uint32_t)buf[1] << 16) |
+                              ((uint32_t)buf[2] << 8) |
+                              (uint32_t)buf[3];
+      if (triggeredLengthMillis > MILLIS_30_MINUTES) {
+        triggeredLengthMillis = MILLIS_10_SECONDS;
+      }
+      EEPROM.put(ADDR_TRIGGERED_LENGTH, triggeredLengthMillis);
+      DPRINT("Saved triggered length (millseconds) to EEPROM in update: ");
+      DPRINTLN(triggeredLengthMillis);
+    }
+  }
+}
+
+// End DOA_seesawCompatibility callbacks
+
 void setup() {
   // put your setup code here, to run once:
   // put your setup code here, to run once:
@@ -677,6 +860,8 @@ void setup() {
   // Seesaw setup
   DOA_seesawCompatibility_setPWMCallback(&PWMCallback);
   DOA_seesawCompatibility_setSeesawReset(&SeesawReset);
+  DOA_seesawCompatibility_setEEPROMReadCallback(&EEPROMReadCallback);
+  DOA_seesawCompatibility_setEEPROMWriteCallback(&EEPROMWriteCallback);
 
   intializeEffects();
 
@@ -743,6 +928,22 @@ void loop() {
 
   button.tick();
   trigger.tick();
+  if (g_bufferedBulkGPIORead) {
+    // Seesaw GPIO button/trigger setting
+    if (g_bufferedBulkGPIORead & FLAG_BUTTON_PRESSED) {
+      BUTTON_FLAG_SET(FLAG_BUTTON_PRESSED);
+    } else if (g_bufferedBulkGPIORead & FLAG_BUTTON_CLICKED) {
+      BUTTON_FLAG_SET(FLAG_BUTTON_CLICKED);
+    } else if (g_bufferedBulkGPIORead & FLAG_BUTTON_DOUBLE_CLICKED) {
+      BUTTON_FLAG_SET(FLAG_BUTTON_DOUBLE_CLICKED);
+    } else if (g_bufferedBulkGPIORead & FLAG_BUTTON_LONG_PRESS_STARTED) {
+      BUTTON_FLAG_SET(FLAG_BUTTON_LONG_PRESS_STARTED);
+    } else if (g_bufferedBulkGPIORead & FLAG_TRIGGER_PRESSED) {
+      BUTTON_FLAG_SET(FLAG_TRIGGER_PRESSED);
+    }
+
+    g_bufferedBulkGPIORead = 0; // clear the buffer
+  }
   stateMachine.update();
   if (stateMachine.isCurrentState(&peripheralState)) {
     // special peripheral mode effect

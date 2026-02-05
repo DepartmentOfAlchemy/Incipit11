@@ -23,9 +23,15 @@ extern volatile uint32_t g_bufferedBulkGPIORead;
 typedef void (*PWMCallbackFP)(uint8_t, uint16_t);
 // Callback function for notification when a software reset occurs
 typedef void (*SeesawResetFP)();
+// Callback function for EEPROM read access
+typedef uint8_t (*EEPROMReadFP)(uint8_t);
+// Callback function for EEPROM write addess
+typedef void (*EEPROMWriteFP)(uint8_t, uint8_t *, uint8_t);
 
 PWMCallbackFP _pwmCallbackPtr = NULL;
 SeesawResetFP _seesawResetPtr = NULL;
+EEPROMReadFP _eepromReadPtr = NULL;
+EEPROMWriteFP _eepromWritePtr = NULL;
 
 // Will be set to the date that the executable was compiled.
 uint16_t DATE_CODE = 0;
@@ -73,6 +79,7 @@ uint16_t DATE_CODE = 0;
 #endif
 
 volatile uint8_t i2c_buffer[32];
+uint8_t buffer[32]; // local buffer
 
 // key event ring buffer
 #define KEY_BUFFER_CAPACITY 5
@@ -90,7 +97,7 @@ keyEventRaw emptyKeyEvent = { {SEESAW_KEYPAD_EDGE_LOW, 0} };
 // Add a key press to the queue (Push)
 bool enqueueKeyEvent(keyEventRaw evt) {
   if (keyCount == KEY_BUFFER_CAPACITY) {
-    DPRINTLN(F("Error: Queue is full"));
+    DPRINTLN(F("Warning: Queue is full"));
     return false;
   }
   keyBuffer[keyTail] = evt;
@@ -131,6 +138,8 @@ void requestData(void);
 void DOA_seesawCompatibility_run(void);
 void DOA_seesawCompatibility_setPWMCallback(PWMCallbackFP pwmCallbackPtr);
 void DOA_seesawCompatibility_setSeesawReset(SeesawResetFP seesawResetPtr);
+void DOA_seesawCompatibility_setEEPROMReadCallback(EEPROMReadFP eepromReadPtr);
+void DOA_seesawCompatibility_setEEPROMWriteCallback(EEPROMWriteFP eepromWritePtr);
 
 void DOA_seesawCompatibility_setDatecode(void) {
   char buf[12];
@@ -232,6 +241,14 @@ void DOA_seesawCompatibility_setSeesawReset(SeesawResetFP seesawResetPtr) {
   _seesawResetPtr = seesawResetPtr;
 }
 
+void DOA_seesawCompatibility_setEEPROMReadCallback(EEPROMReadFP eepromReadPtr) {
+  _eepromReadPtr = eepromReadPtr;
+}
+
+void DOA_seesawCompatibility_setEEPROMWriteCallback(EEPROMWriteFP eepromWritePtr) {
+  _eepromWritePtr = eepromWritePtr;
+}
+
 // --- I2C support ---
 void receiveData(int numBytes) {
   for (uint8_t i = numBytes; i < sizeof(i2c_buffer); i++) {
@@ -257,13 +274,47 @@ void receiveData(int numBytes) {
       DOA_seesawCompatibility_reset();
       DPRINTLN(F("Resetting"));
     }
+  } else if (base_cmd == SEESAW_GPIO_BASE) {
+    uint32_t temp;
+    temp = i2c_buffer[2];
+    temp <<= 8;
+    temp |= i2c_buffer[3];
+    temp <<= 8;
+    temp |= i2c_buffer[4];
+    temp <<= 8;
+    temp |= i2c_buffer[5];
+
+    switch (module_cmd) {
+      case SEESAW_GPIO_BULK:
+        g_bufferedBulkGPIORead = temp;
+        break;
+
+      case SEESAW_GPIO_BULK_SET:
+      case SEESAW_GPIO_BULK_CLR:
+        for (uint8_t pin = 0; pin < 32; pin++) {
+          if ((temp >> pin) & 0x1) {
+            if (module_cmd == SEESAW_GPIO_BULK_SET) {
+              g_bufferedBulkGPIORead |= (1UL << pin);
+            } else if (module_cmd == SEESAW_GPIO_BULK_CLR) {
+              g_bufferedBulkGPIORead &= ~(1UL << pin);
+            }
+          }
+        }
+    }
   } else if (base_cmd == SEESAW_TIMER_BASE) {
     if (module_cmd == SEESAW_TIMER_PWM) {
       uint8_t pin = i2c_buffer[2];
-      uint16_t value = (i2c_buffer[3] << 8) + i2c_buffer[4];
+      uint16_t value = ((uint16_t)i2c_buffer[3] << 8) | i2c_buffer[4];
       if (_pwmCallbackPtr != NULL) {
         _pwmCallbackPtr(pin, value);
       }
+    }
+  } else if (base_cmd == SEESAW_EEPROM_BASE) {
+    if (_eepromWritePtr != NULL) {
+      for (int i = 0; i < numBytes - 2; i++) {
+        buffer[i] = i2c_buffer[i+2];
+      }
+      _eepromWritePtr(module_cmd, buffer, numBytes - 2);
     }
   }
 }
@@ -281,9 +332,6 @@ void requestData(void) {
     }
   } else if (base_cmd == SEESAW_GPIO_BASE) {
     if (module_cmd == SEESAW_GPIO_BULK) {
-      // Adafruit seesaw library for Arduino doesn't appear to be able to call
-      // SEESAW_GPIO_INTFLAG. So using this to act like the INTFLAG
-      // DOA_seesawCompatibility_write32(g_bufferedBulkGPIORead);
       DOA_seesawCompatibility_write32(g_bufferedBulkGPIORead);
     }
   } else if (base_cmd == SEESAW_KEYPAD_BASE) {
@@ -293,6 +341,17 @@ void requestData(void) {
       while (keyCount > 0) {
         DOA_seesawCompatibility_write8(dequeueKeyEvent().reg);
       }
+    }
+  } else if (base_cmd == SEESAW_EEPROM_BASE) {
+    if (_eepromReadPtr != NULL) {
+      DPRINT("Reading EEPROM address ");
+      DPRINTLN(module_cmd);
+      DOA_seesawCompatibility_write8(_eepromReadPtr(module_cmd));
+    } else {
+      DPRINT("Would be reading EEPROM address ");
+      DPRINT(module_cmd);
+      DPRINTLN(" if callback was configured.");
+      DOA_seesawCompatibility_write8(0);
     }
   }
 }
